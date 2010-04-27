@@ -1,0 +1,34 @@
+# companieshouse-scraper
+
+A small Clojure scraper for the Companies house website. 
+It grabs the information and saves it to a MySQL database.
+
+## Usage
+; Get access to the scrapers stuff
+(use 'companieshouse-scraper.main)
+
+; Setup the DB
+(companieshouse-scraper.main/setup-db "localhost" 3306 "companies" "root" "password")
+
+; Scrape 5 results and print the names
+(companieshouse-scraper.main/scrape-search "Bob" 10
+	       #(println (:name %)))
+
+; Scrape 10 results starting with names like Bob. 
+; Save each to the database and pause for up to a second each time
+(companieshouse-scraper.main/scrape-search "Bob" 10
+	       #(do (save-company %) (. Thread sleep (rand 1000))))
+
+## Installation
+
+ - Get MySQL running with the proper schema:
+
+create database companies;
+use companies;
+create table companies (id int not null auto_increment primary key, number varchar(255), name varchar(255), postcode varchar(10), address text);
+create table details (id int not null auto_increment primary key, company varchar(255), name varchar(255), data varchar(255));
+
+## License
+
+Licensed under the same thing Clojure is licensed under. The EPL, of which you can find a copy of here: 
+http://www.eclipse.org/legal/epl-v10.html and at the root of this directory.
