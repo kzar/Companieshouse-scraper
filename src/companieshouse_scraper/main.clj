@@ -88,7 +88,8 @@
 		postcode)))
 
 (defn strip-excess-whitespace [mess]
-  (str-join " " (re-seq #"\S+" mess)))
+  (when (string? mess)
+    (str-join " " (re-seq #"\S+" mess))))
 
 (defn add-comma [line]
   (let [line (strip-excess-whitespace line)]
@@ -100,19 +101,21 @@
   (.substring string 0 (- (count string) n)))
 
 (defn scrape-address [page]
-  (let [addr (html/select page [:td.padding36 :> text-node])
-	postcode (strip-excess-whitespace (last addr))
-	addr (apply str (map add-comma (butlast (rest addr))))]
-    (if (postcode? postcode)
-      {:address (strip-last 2 addr) :postcode postcode}
-      {:address (str addr postcode) :postcode ""})))
+  (let [addr (html/select page [:td.padding36 :> text-node])]
+    (let [postcode (strip-excess-whitespace (last addr))
+	  addr (apply str (map add-comma (butlast (rest addr))))]
+      (when (not (empty? addr))
+	(if (postcode? postcode)
+	  {:address (strip-last 2 addr) :postcode postcode}
+	  {:address (str addr postcode) :postcode ""})))))
 
 (defn scrape-name-num [page]
-  (let [name-num (html/select page [:td.padding36 :> :strong :> text-node])
-	name (first name-num)
-	number (re-find #"[^ ]+$" (second name-num))]
-    (when (and name number)
-      {:name name :number number})))
+  (let [name-num (html/select page [:td.padding36 :> :strong :> text-node])]
+    (when (second name-num)
+      (let [name (first name-num)
+	    number (re-find #"[^ ]+$" (second name-num))]
+	(when (and name number)
+	  {:name name :number number})))))
 
 (defn format-keyword [key-string]
   (keyword (.toLowerCase (re-gsub #" " "-" key-string))))
@@ -154,17 +157,14 @@
 			   term
 			   (dec attempts-left))
 	   (let [company (scrape-details page)]
-	     (if (valid-company? company)
-	       (if (not (repeat-company? company prev-companies))
-		 {:session session :company company
-		  :prev-companies (if (> link-num 42)
-				    (cons company prev-companies)
-				    (list company))}
-		 (scrape-company session (inc link-num) term
-				 (dec attempts-left)
-				 (cons company prev-companies)))
-	       (scrape-company session 41 term
-			       (dec attempts-left) prev-companies))))))))
+	     (if (not (repeat-company? company prev-companies))
+	       {:session session :company (valid-company? company)
+		:prev-companies (if (> link-num 42)
+				  (cons company prev-companies)
+				  (list company))}
+	       (recur session (inc link-num) term
+		      (dec attempts-left)
+		      (cons company prev-companies)))))))))
 
 (defn scrape-search
   ([term f] (scrape-search term nil f))
@@ -189,12 +189,8 @@
 ; Fix first 40 issue
 ;  - when count of search results is less than 40 replace
 ;    (repeat 42) with (cons (range count) (repeat 42))
-; Fix no address exception
-;  - When no address it tries to call strip-excess-whitespace
-;    anyway, we need to just skip over that page instead of
-;    trying to make something that doesn't exist look nice.
 
 ;; Edge cases
-; Search for "CHEERSTAGE PROPERTIES LTD." 6/7 results in
-; Search for "A & J LTD" 3? results in
-; A & J FRENCH (OXFORD) LIMITED - No address or details!
+; Search for "CHEERSTAGE PROPERTIES LTD." 6/7 results in - repeat
+; Search for "A & J LTD" 3? results in - loop
+; "A & J FRENCH (OXFORD) LIMITED" - No address or details!
