@@ -4,15 +4,21 @@ A small Clojure scraper for the Companies house website.
 It grabs the information and saves it to a MySQL database.
 
 ## Usage
+; Grab the project and launch clojure
+git clone git@github.com:kzar/Companieshouse-scraper.git
+cd Companieshouse-scraper/
+lein deps
+lein repl
+
 ; Get access to the scrapers stuff
 (use 'companieshouse-scraper.main)
-
-; Setup the DB
-(companieshouse-scraper.main/setup-db "localhost" 3306 "companies" "root" "password")
 
 ; Scrape 5 results and print the names
 (companieshouse-scraper.main/scrape-search "Bob" 10
 	       #(println (:name %)))
+
+; Setup the DB
+(companieshouse-scraper.main/setup-db "localhost" 3306 "companies" "root" "password")
 
 ; Scrape 10 results starting with names like Bob. 
 ; Save each to the database and pause for up to a second each time
