@@ -14,7 +14,7 @@ lein repl
 (use 'companieshouse-scraper.main)
 
 ; Scrape 5 results and print the names
-(companieshouse-scraper.main/scrape-search "Bob" 10
+(companieshouse-scraper.main/scrape-search "Bob" 5
 	       #(println (:name %)))
 
 ; Setup the DB
