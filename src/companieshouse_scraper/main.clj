@@ -32,14 +32,10 @@
   (with-connection *db*
     (when-not (company-stored? company)
       (insert-values :companies
-		     [:number :name :address :postcode]
+		     [:number :name :address :postcode :details]
 		     [(:number company) (:name company)
-		      (:address company) (:postcode company)])
-      (doseq [[key val] company]
-	(when-not (vec-contains? key [:name :number :postcode :url :address])
-	  (insert-values :details
-			 [:company :name :data]
-			 [(:number company) (name key) val]))))))
+		      (:address company) (:postcode company)
+		      (:details company)]))))
 
 (defn make-input-stream [input-string]
   (java.io.ByteArrayInputStream. (.getBytes (apply str input-string))))
@@ -69,17 +65,36 @@
      (str *base-url* session "/companysearch"
 	  (when num (str "?link=" num)))))
 
-(defn perform-search [term session]
-  (let [params {"cnumb" "", "stype" "A", "live" "on",
-		"cosearch" "1", "cname" term,
-		"cosearch.x" "39", "cosearch.y" "22"}]
-    (web-request (link session) :post params)
-    session))
+(defn perform-search
+  ([term session]
+     (perform-search term session nil))
+  ([term session f]
+     (let [params {"cnumb" "", "stype" "A", "live" "on",
+		   "cosearch" "1", "cname" term,
+		   "cosearch.x" "39", "cosearch.y" "22"}
+	   response (web-request (link session) :post params)]
+       (if f
+	 (f response)
+	 session))))
 
 (defn new-session [term]
   (let [url (web-request *base-url* :url)
 	session (second (re-find #".*\.gov\.uk/(\w+)/.*" url))]
     (perform-search term session)))
+
+(defn search-links [term session]
+  (let [link-selector [:table.compResultTable
+		       (attr-contains :href "companysearch?link=")]
+	results (perform-search term session
+				#(html/select % link-selector))
+	links (map #(Integer/parseInt
+		     (re-find #"[0-9]+$" (:href (:attrs %)))) results)]
+    links))
+
+(defn unusual-search-links? [term session]
+  (let [link-nums (search-links term session)]
+    (when (< (count link-nums) 80)
+      link-nums)))
 
 (defn postcode? [postcode]
   (and (string? postcode)
@@ -117,23 +132,18 @@
 	(when (and name number)
 	  {:name name :number number})))))
 
-(defn format-keyword [key-string]
-  (keyword (.toLowerCase (re-gsub #" " "-" key-string))))
-
 (defn scrape-details [page]
   (when page
     (let [address (scrape-address page)
 	  name-num (scrape-name-num page)
-	  keys (html/select page [:td.yellowCreamTable :> :strong :> text-node])
-	  data (html/select page [:td.yellowCreamTable :> text-node])
-	  values (map first (re-seq #":([^:])+" (strip-excess-whitespace (str-join " " data))))
-	  details (map #(array-map (format-keyword %1) (re-gsub #": " "" %2)) keys values)
-	  details (reduce merge details)]
-      (merge name-num address details))))
+	  details (apply str (html/emit* (html/select page [:td.yellowCreamTable])))]
+      (merge name-num address {:details details}))))
 
 (defn valid-company? [company]
-  (when (and (:name company) (:number company)
-	     (:address company) (> (count company) 3))
+  (when (and (not (empty? (:name company)))
+	     (not (empty? (:number company)))
+	     (string? (:address company))
+	     (string? (:details company)))
     company))
 
 (defn company-page? [page]
@@ -153,9 +163,9 @@
 	   (scrape-company (new-session (or (:name (first prev-companies))
 					    term))
 			   link-num
-			   prev-companies
 			   term
-			   (dec attempts-left))
+			   (dec attempts-left)
+			   prev-companies)
 	   (let [company (scrape-details page)]
 	     (if (not (repeat-company? company prev-companies))
 	       {:session session :company (valid-company? company)
@@ -169,10 +179,11 @@
 (defn scrape-search
   ([term f] (scrape-search term nil f))
   ([term limit f]
-     (let [link-nums (cons 41 (repeat 42))
-	   link-nums (if limit (take limit link-nums) link-nums)
-	   session (new-session term)]
-       (scrape-search term session link-nums '() f)))
+     (let [session (new-session term)
+	   link-nums (or (unusual-search-links? term session)
+			 (cons 41 (repeat 42)))
+	   link-nums (if limit (take limit link-nums) link-nums)]
+       (scrape-search term session link-nums nil f)))
   ([term session link-nums prev-companies f]
      (when (not (empty? link-nums))
        (let [result (scrape-company session
@@ -183,14 +194,3 @@
 	   (f (:company result))
 	   (recur term (:session result)
 		  (rest link-nums) (:prev-companies result) f))))))
-
-;; Todo
-
-; Fix first 40 issue
-;  - when count of search results is less than 40 replace
-;    (repeat 42) with (cons (range count) (repeat 42))
-
-;; Edge cases
-; Search for "CHEERSTAGE PROPERTIES LTD." 6/7 results in - repeat
-; Search for "A & J LTD" 3? results in - loop
-; "A & J FRENCH (OXFORD) LIMITED" - No address or details!
