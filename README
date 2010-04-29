@@ -14,7 +14,7 @@ lein repl
 (use 'companieshouse-scraper.main)
 
 ; Scrape 5 results and print the names
-(companieshouse-scraper.main/scrape-search "Bob" 5
+(companieshouse-scraper.main/search "Bob" 5
 	       #(println (:name %)))
 
 ; Setup the DB
@@ -22,8 +22,10 @@ lein repl
 
 ; Scrape 10 results starting with names like Bob. 
 ; Save each to the database and pause for up to a second each time
-(companieshouse-scraper.main/scrape-search "Bob" 10
-	       #(do (save-company %) (. Thread sleep (rand 1000))))
+(companieshouse-scraper.main/search "Bob" 10
+	       #(do (save-company %) 
+	            (. Thread sleep (rand 1000))
+		    (println (:name %))))
 
 ## Installation
 
@@ -40,29 +42,16 @@ create table companies (id int not null auto_increment primary key, number varch
 ; "A & J FRENCH (OXFORD) LIMITED" - No address or details!
 ; "A & L CF JUNE (1) LIMITED" - unusual formatting
 ; "a" - gives you 40 results instead of 80
-; "A * ASBESTOS LTD" - companies house skips back to result 1 again!
+; "AASB LIMITED", next result (A * ASBESTOS LTD) jumps companies house back to start!
 
 ## Todo
- - Refactor, rename the link que to something else like event que and then have everything
-  be able to add events to the top. That way we can handle special exceptions easily.
-  :more-results   :new-session   :link   
-
- - Code a workaround for company names containing '*'s or anything else
-   that might make the scraper skip back to the start!
-
  - Instead of saving all the details as HTML figure out how to parse it
    (This is tricky because the website is basically a CMS and the content
    varies greatly.)
 
- - When searching for "a" you get the first 40 results, this is unusual.
-   The scraper will stop after those results, it should "press" the 'more results'
-   button instead.
-
- - Tidy up unusual-search? function
-
  - Add tests
-
  - Add docstrings
+ - Make log-error function do something useful
 
 ## License
 

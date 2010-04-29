@@ -10,6 +10,12 @@
 (def *base-url* "http://wck2.companieshouse.gov.uk/")
 (def *retrys* 4)
 (def *db* nil)
+(def *first-company* "07165598")
+(def *debug* false)
+
+(defn debug [msg]
+  (when *debug*
+    (println msg)))
 
 (defn setup-db [host port database user password]
   (def *db*
@@ -29,6 +35,7 @@
     needle))
 
 (defn save-company [company]
+  (debug (str "Saving company: " (:name company)))
   (with-connection *db*
     (when-not (company-stored? company)
       (insert-values :companies
@@ -82,19 +89,13 @@
 	session (second (re-find #".*\.gov\.uk/(\w+)/.*" url))]
     (perform-search term session)))
 
-(defn search-links [term session]
+(defn current-search [session]
   (let [link-selector [:table.compResultTable
 		       (attr-contains :href "companysearch?link=")]
-	results (perform-search term session
-				#(html/select % link-selector))
-	links (map #(Integer/parseInt
-		     (re-find #"[0-9]+$" (:href (:attrs %)))) results)]
+	source (web-request (link session))
+	links (map #(Integer/parseInt (re-find #"[0-9]+$" (:href (:attrs %))))
+		   (html/select source link-selector))]
     links))
-
-(defn unusual-search-links? [term session]
-  (let [link-nums (search-links term session)]
-    (when (< (count link-nums) 80)
-      link-nums)))
 
 (defn postcode? [postcode]
   (and (string? postcode)
@@ -153,44 +154,84 @@
 (defn repeat-company? [company prev-companies]
   (some #(= (:number company) (:number %)) prev-companies))
 
-(defn scrape-company
-  ([session link-num term prev-companies]
-     (scrape-company session link-num term *retrys* prev-companies))
-  ([session link-num term attempts-left prev-companies]
-     (when (> attempts-left 0)
-       (let [page (web-request (link session link-num))]
-	 (if (not (company-page? page))
-	   (scrape-company (new-session (or (:name (first prev-companies))
-					    term))
-			   link-num
-			   term
-			   (dec attempts-left)
-			   prev-companies)
-	   (let [company (scrape-details page)]
-	     (if (not (repeat-company? company prev-companies))
-	       {:session session :company (valid-company? company)
-		:prev-companies (if (> link-num 42)
-				  (cons company prev-companies)
-				  (list company))}
-	       (recur session (inc link-num) term
-		      (dec attempts-left)
-		      (cons company prev-companies)))))))))
+(defn add-links [numbers]
+  (map #(array-map :scrape %) numbers))
 
-(defn scrape-search
-  ([term f] (scrape-search term nil f))
+(defn special-events [company last-company event session]
+  (cond
+   ; Handle first 40 companies
+   (and (not company) (= (count (current-search session)) 40)
+	(not (= (:scrape event) 1)))
+   (add-links (range 1 41))
+   ; Handle companies that jump results back to start
+   (and (not (empty? last-company))
+	(= (:number company) *first-company*)
+	(:scrape event))
+   (list {:do-search (:name last-company)}
+	 {:scrape (inc (:scrape event))})))
+
+(defn setup-events [term session]
+  (add-links (cons 41 (repeat 42))))
+
+(defn scrape-company [session link-num term attempts-left prev-companies]
+  (if (< attempts-left 1)
+    {:events (list {:scrape-failed prev-companies}) :session session}
+    (let [page (web-request (link session link-num))]
+      (if (not (company-page? page))
+	(scrape-company (new-session (or (:name (first prev-companies))
+					 term))
+			link-num
+			term
+			(dec attempts-left)
+			prev-companies)
+	(let [company (scrape-details page)]
+	  (if (not (repeat-company? company prev-companies))
+	    {:session session :company (valid-company? company)
+	     :prev-companies (if (> link-num 42)
+			       (cons company prev-companies)
+			       (list company))}
+	    (recur session (inc link-num) term
+		   (dec attempts-left)
+		   (cons company prev-companies))))))))
+
+(defn log-error [type message]
+  ; FIXME do something more useful
+  (println (str "Got an error " type " with message " message)))
+
+(defn handle-event [[event data] session prev-companies term f]
+  (debug (str "Event: {" event ", " data "}"))
+  (cond
+   (= event :scrape)
+   (let [result (scrape-company session data term *retrys* prev-companies)]
+     (when (:company result)
+       (f (:company result)))
+     result)
+   (= event :scrape-failed)
+   (log-error :scrape-failed data)
+   (= event :more-results)
+   (do (click-more-results session data) nil)
+   (= event :do-search)
+   (do (perform-search data session) nil)))
+
+(defn control-loop [events session prev-companies term limit f]
+  (when (and (not (empty? events)) (or (not limit) (> limit 0)))
+    (let [special-events (special-events (first prev-companies)
+					 (second prev-companies)
+					 (first events) session)]
+      (if special-events
+	(control-loop (concat special-events events) session
+		      prev-companies term limit f)
+	(let [result (handle-event (first (seq (first events))) session
+				   prev-companies term f)
+	      limit (when limit (dec limit))]
+	  (recur (rest events) (or (:session result) session)
+		 (list (:company result) (first prev-companies))
+		 (:or (:term result) term) limit f))))))
+
+(defn search
+  ([term f]
+     (search term nil f))
   ([term limit f]
      (let [session (new-session term)
-	   link-nums (or (unusual-search-links? term session)
-			 (cons 41 (repeat 42)))
-	   link-nums (if limit (take limit link-nums) link-nums)]
-       (scrape-search term session link-nums nil f)))
-  ([term session link-nums prev-companies f]
-     (when (not (empty? link-nums))
-       (let [result (scrape-company session
-				    (first link-nums)
-				    term
-				    prev-companies)]
-	 (when result
-	   (f (:company result))
-	   (recur term (:session result)
-		  (rest link-nums) (:prev-companies result) f))))))
+	   events (setup-events term session)]
+       (control-loop events session nil term limit f))))
