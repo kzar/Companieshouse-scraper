@@ -21,7 +21,7 @@
 
 (defn company-stored? [{number :number}]
   (with-query-results rs
-    [(str "select number from companies where number='" number "'")]
+    ["select number from companies where number=?" number]
     (doall rs)))
 
 (defn vec-contains? [needle haystack]
