@@ -43,6 +43,7 @@ create table companies (id int not null auto_increment primary key, number varch
 ; "A & L CF JUNE (1) LIMITED" - unusual formatting
 ; "a" - gives you 40 results instead of 80
 ; "AASB LIMITED", next result (A * ASBESTOS LTD) jumps companies house back to start!
+; "ABACUS ENTERPRISES LIMITED" - 2 in - repeat
 
 ## Todo
  - Instead of saving all the details as HTML figure out how to parse it

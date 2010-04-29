@@ -11,7 +11,7 @@
 (def *retrys* 4)
 (def *db* nil)
 (def *first-company* "07165598")
-(def *debug* false)
+(def *debug* nil)
 
 (defn debug [msg]
   (when *debug*
@@ -50,6 +50,11 @@
 (defn parse-html [result]
   (html/html-resource (make-input-stream (:body-seq result))))
 
+(defn format-url [url method params]
+  (if (and (= (method :get)) (not (empty? params)))
+    (str url "?" (url-encode params))
+    url))
+
 (defn web-request
   ([url]
      (web-request url parse-html))
@@ -59,11 +64,11 @@
      (web-request url parse-html method params))
   ([url f method params]
      (f
-      (if (= method :post)
-	(clojure.http.client/request url method {} {} params)
-	(if (not (empty? params))
-	  (clojure.http.client/request (str url "?" (url-encode params)))
-	  (clojure.http.client/request url))))))
+      (try
+       (clojure.http.client/request (format-url url method params)
+				    method {} {}
+				    (when (= method :post) params))
+       (catch java.net.ConnectException _ nil)))))
 
 (defn link
   ([session]
@@ -225,7 +230,7 @@
 				   prev-companies term f)
 	      limit (when limit (dec limit))]
 	  (recur (rest events) (or (:session result) session)
-		 (list (:company result) (first prev-companies))
+		 (:prev-companies result)
 		 (:or (:term result) term) limit f))))))
 
 (defn search
