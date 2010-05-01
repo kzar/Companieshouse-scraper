@@ -204,6 +204,9 @@
   ; FIXME do something more useful
   (println (str "Got an error " type " with message " message)))
 
+(defn click-more-results [session times]
+  (dotimes [i times] (web-request (link session) :get {"morebut" 1})))
+
 (defn handle-event [[event data] session prev-companies term f]
   (debug (str "Event: {" event ", " data "}"))
   (cond
