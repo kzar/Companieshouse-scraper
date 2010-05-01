@@ -8,7 +8,7 @@
   (:require [clojure.http.resourcefully :as resourcefully]))
 
 (def *base-url* "http://wck2.companieshouse.gov.uk/")
-(def *retrys* 10)
+(def *retrys* 4)
 (def *db* nil)
 (def *first-company* "07165598")
 (def *debug* nil)
@@ -195,9 +195,10 @@
 	     :prev-companies (if (> link-num 42)
 			       (cons company prev-companies)
 			       (list company))}
-	    (recur session (inc link-num) term
-		   (dec attempts-left)
-		   (cons company prev-companies))))))))
+	    (when (< link-num 80)
+	      (recur session (inc link-num) term
+		     attempts-left
+		     (cons company prev-companies)))))))))
 
 (defn log-error [type message]
   ; FIXME do something more useful
