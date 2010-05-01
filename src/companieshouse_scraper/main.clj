@@ -8,7 +8,7 @@
   (:require [clojure.http.resourcefully :as resourcefully]))
 
 (def *base-url* "http://wck2.companieshouse.gov.uk/")
-(def *retrys* 4)
+(def *retrys* 10)
 (def *db* nil)
 (def *first-company* "07165598")
 (def *debug* nil)

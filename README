@@ -15,7 +15,7 @@ lein repl
 
 ; Scrape 5 results and print the names
 (companieshouse-scraper.main/search "Bob" 5
-	       #(println (:name %)))
+				    #(println (:name %)))
 
 ; Setup the DB
 (companieshouse-scraper.main/setup-db "localhost" 3306 "companies" "root" "password")
@@ -23,9 +23,9 @@ lein repl
 ; Scrape 10 results starting with names like Bob. 
 ; Save each to the database and pause for up to a second each time
 (companieshouse-scraper.main/search "Bob" 10
-	       #(do (save-company %) 
-	            (. Thread sleep (rand 1000))
-		    (println (:name %))))
+				    #(do (save-company %)
+					 (. Thread sleep (rand 1000))
+					 (println (:name %))))
 
 ## Installation
 
@@ -44,6 +44,7 @@ create table companies (id int not null auto_increment primary key, number varch
 ; "a" - gives you 40 results instead of 80
 ; "AASB LIMITED", next result (A * ASBESTOS LTD) jumps companies house back to start!
 ; "ABACUS ENTERPRISES LIMITED" - 2 in - repeat
+; "ABBEY NATIONAL FINANCIAL INVESTMENTS NO.1 LIMITED" - Brutal batch of ~6 to get past
 
 ## Todo
  - Instead of saving all the details as HTML figure out how to parse it
