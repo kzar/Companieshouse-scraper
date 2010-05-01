@@ -195,7 +195,9 @@
 	     :prev-companies (if (> link-num 42)
 			       (cons company prev-companies)
 			       (list company))}
-	    (when (< link-num 80)
+	    (if (= link-num 80)
+	      {:events (concat (list {:more-results 1})
+			      (add-links (range 1 42)))}
 	      (recur session (inc link-num) term
 		     attempts-left
 		     (cons company prev-companies)))))))))
@@ -233,7 +235,8 @@
 	(let [result (handle-event (first (seq (first events))) session
 				   prev-companies term f)
 	      limit (when limit (dec limit))]
-	  (recur (rest events) (or (:session result) session)
+	  (recur (concat (:events result) (rest events))
+		 (or (:session result) session)
 		 (:prev-companies result)
 		 (:or (:term result) term) limit f))))))
 
