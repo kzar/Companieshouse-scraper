@@ -188,7 +188,7 @@
 	     :prev-companies (if (> link-num 42)
 			       (cons company prev-companies)
 			       (list company))
-	     :events (when (re-find #"\*" (:name company))
+	     :events (when (and (:name company) (re-find #"\*" (:name company)))
 		       (list {:do-search (:name (first prev-companies))}
 			     {:scrape (inc link-num)}))}
 	    (if (= link-num 80)
