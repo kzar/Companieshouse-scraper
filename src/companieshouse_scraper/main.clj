@@ -10,7 +10,6 @@
 (def *base-url* "http://wck2.companieshouse.gov.uk/")
 (def *retrys* 4)
 (def *db* nil)
-(def *first-company* "07165598")
 (def *debug* nil)
 
 (defn debug [msg]
@@ -167,13 +166,7 @@
    ; Handle first 40 companies
    (and (not company) (= (count (current-search session)) 40)
 	(not (= (:scrape event) 1)))
-   (add-links (range 1 41))
-   ; Handle companies that jump results back to start
-   (and (not (empty? last-company))
-	(= (:number company) *first-company*)
-	(:scrape event))
-   (list {:do-search (:name last-company)}
-	 {:scrape (inc (:scrape event))})))
+   (add-links (range 1 41))))
 
 (defn setup-events [term session]
   (add-links (cons 41 (repeat 42))))
@@ -194,7 +187,10 @@
 	    {:session session :company (valid-company? company)
 	     :prev-companies (if (> link-num 42)
 			       (cons company prev-companies)
-			       (list company))}
+			       (list company))
+	     :events (when (re-find #"\*" (:name company))
+		       (list {:do-search (:name (first prev-companies))}
+			     {:scrape (inc link-num)}))}
 	    (if (= link-num 80)
 	      {:events (concat (list {:more-results 1})
 			      (add-links (range 1 42)))}
