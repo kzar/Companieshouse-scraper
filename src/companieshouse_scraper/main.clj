@@ -2,7 +2,7 @@
   (:use [clojure.http.client]
 	[clojure.inspector :only (inspect inspect-tree)]
 	[clojure.contrib.str-utils :only (str-join re-gsub)]
-	[clojure.contrib.seq-utils :only (indexed find-first)]
+	[clojure.contrib.seq-utils :only (find-first)]
 	[clojure.contrib.json.write]
 	[net.cgrand.enlive-html :as html]
 	[clojure.contrib.sql])
