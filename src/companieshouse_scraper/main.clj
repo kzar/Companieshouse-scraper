@@ -2,6 +2,7 @@
   (:use [clojure.http.client]
 	[clojure.inspector :only (inspect inspect-tree)]
 	[clojure.contrib.str-utils :only (str-join re-gsub)]
+	[clojure.contrib.seq-utils :only (indexed find-first)]
 	[clojure.contrib.json.write]
 	[net.cgrand.enlive-html :as html]
 	[clojure.contrib.sql])
@@ -171,6 +172,16 @@
 (defn setup-events [term session]
   (add-links (cons 41 (repeat 42))))
 
+(defn fucked-name? [{name :name}]
+  (when (string? name)
+    (re-find #"\*" name)))
+
+(defn handle-jump-back [link-num prev-companies]
+  (let [company (find-first #(not (fucked-name? %)) prev-companies)]
+    (when company
+      (list {:do-search (:name company)}
+	    {:scrape (inc link-num)}))))
+
 (defn scrape-company [session link-num term attempts-left prev-companies]
   (if (< attempts-left 1)
     {:events (list {:scrape-failed prev-companies}) :session session}
@@ -185,15 +196,15 @@
 	(let [company (scrape-details page)]
 	  (if (not (repeat-company? company prev-companies))
 	    {:session session :company (valid-company? company)
-	     :prev-companies (if (> link-num 42)
+	     :prev-companies (if (or (> link-num 42) (fucked-name? company))
 			       (cons company prev-companies)
 			       (list company))
-	     :events (when (and (:name company) (re-find #"\*" (:name company)))
-		       (list {:do-search (:name (first prev-companies))}
-			     {:scrape (inc link-num)}))}
+	     :events (when (fucked-name? company)
+		       (handle-jump-back link-num prev-companies))
+	     :dec-limit 1}
 	    (if (= link-num 80)
 	      {:events (concat (list {:more-results 1})
-			      (add-links (range 1 42)))}
+			       (add-links (range 1 42)))}
 	      (recur session (inc link-num) term
 		     attempts-left
 		     (cons company prev-companies)))))))))
@@ -218,7 +229,13 @@
    (= event :more-results)
    (do (click-more-results session data) nil)
    (= event :do-search)
-   (do (perform-search data session) nil)))
+   (do (perform-search data session) {:prev-companies prev-companies})))
+
+(defn update-limit [limit {amount :dec-limit}]
+  (when limit
+    (if (number? amount)
+      (- limit amount)
+      limit)))
 
 (defn control-loop [events session prev-companies term limit f]
   (when (and (not (empty? events)) (or (not limit) (> limit 0)))
@@ -230,7 +247,7 @@
 		      prev-companies term limit f)
 	(let [result (handle-event (first (seq (first events))) session
 				   prev-companies term f)
-	      limit (when limit (dec limit))]
+	      limit (update-limit limit result)]
 	  (recur (concat (:events result) (rest events))
 		 (or (:session result) session)
 		 (:prev-companies result)
