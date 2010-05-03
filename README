@@ -48,6 +48,7 @@ create table companies (id int not null auto_increment primary key, number varch
 ; "ABERDEEN COMPOSITE COMPANY (1342)" - Brutal block of 40+ companies that spans over two pages
 ; "ABRAKADABRI LIMITED" (ABRA*KEBAB*RA LIMITED), jumps back
 ; "ACTONE RECORDS LTD" - two * company names follow
+; "A.D.I. SOLUTIONS LTD" - Loop
 
 ## Todo
  - Instead of saving all the details as HTML figure out how to parse it

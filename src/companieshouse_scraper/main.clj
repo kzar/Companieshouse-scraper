@@ -198,7 +198,7 @@
 	    {:session session :company (valid-company? company)
 	     :prev-companies (if (or (> link-num 42) (fucked-name? company))
 			       (cons company prev-companies)
-			       (list company))
+			       (list company (first prev-companies)))
 	     :events (when (fucked-name? company)
 		       (handle-jump-back link-num prev-companies))
 	     :dec-limit 1}
