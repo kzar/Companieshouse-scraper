@@ -12,7 +12,7 @@
 (def *retrys* 4)
 (def *busy-sleep-time* 600000)
 (def *db* nil)
-(def *debug* nil)
+(def *debug* true)
 
 (defn debug [msg]
   (when *debug*
@@ -177,21 +177,23 @@
 (defn first-good-name [prev-companies]
   (find-first #(not (fucked-name? %)) prev-companies))
 
-(defn handle-jump-back [link-num prev-companies]
-  (let [company (first-good-name prev-companies)]
-    (when company
-      (list {:do-search (:name company)}
-	    {:scrape (inc link-num)}))))
+(defn search-and-click
+  ([link-num prev-companies]
+     (search-and-click link-num prev-companies 0))
+  ([link-num prev-companies num-ahead]
+     (let [company (first-good-name prev-companies)]
+       (when company
+	 (list {:do-search (:name company)}
+	       {:scrape (+ num-ahead link-num)})))))
 
 (defn scrape-company [session link-num term attempts-left prev-companies]
   (let [page (web-request (link session link-num))]
     (if (busy-page? page)
-      {:events (list {:site-busy 1}
-		     {:do-search (:name (first-good-name prev-companies))})
+      {:events (concat (list {:site-busy 1})
+		       (search-and-click link-num prev-companies))
        :prev-companies prev-companies}
       (if (not (company-page? page))
-	{:events (list {:do-search (or (:name (first prev-companies)) term)}
-		       {:scrape 41})
+	{:events (search-and-click link-num prev-companies)
 	 :attempts-left (dec attempts-left) :prev-companies prev-companies}
 	(let [company (scrape-details page)]
 	  (if (repeat-company? company prev-companies)
@@ -204,7 +206,7 @@
 		{:company company
 		 :events (concat (list {:dec-limit 1})
 			       (when (fucked-name? company)
-				 (handle-jump-back link-num prev-companies)))
+				 (search-and-click link-num prev-companies 1)))
 		 :prev-companies needed-comps}
 		{:events (list {:invalid-company (:name company)})
 		 :prev-companies needed-comps}))))))))
@@ -242,7 +244,8 @@
 				*busy-sleep-time*))
      (. Thread sleep *busy-sleep-time*))
    (= event :scrape-failed)
-   (log-error :scrape-failed data)
+   (do (log-error :scrape-failed data)
+       {:halt true})
    (= event :more-results)
    (do (click-more-results session data) nil)
    (= event :invalid-company)
@@ -252,7 +255,7 @@
      (debug (str (dec limit) " scrapes left"))
      {:limit (dec limit)})
    (= event :do-search)
-   (do (perform-search data session) {:prev-companies prev-companies})))
+   {:session (new-session data) :prev-companies prev-companies}))
 
 (defn control-loop [events session prev-companies term limit attempts-left f]
   (when (and (not (empty? events)) (or (not limit) (> limit 0)))
@@ -265,13 +268,15 @@
 		      prev-companies term limit attempts-left f)
 	(let [result (handle-event (first (seq (first events))) session
 				   prev-companies term limit f)]
-	  (recur (concat (:events result) (rest events))
-		 (or (:session result) session)
-		 (or (:prev-companies result) prev-companies)
-		 (or (:term result) term)
-		 (or (:limit result) limit)
-		 (or (:attempts-left result) *retrys*)
-		 f))))))
+	  (if (:halt result)
+	    (println "Told to :halt")
+	    (recur (concat (:events result) (rest events))
+		   (or (:session result) session)
+		   (or (:prev-companies result) prev-companies)
+		   (or (:term result) term)
+		   (or (:limit result) limit)
+		   (or (:attempts-left result) *retrys*)
+		   f)))))))
 (defn search
   ([term f]
      (search term nil f))
