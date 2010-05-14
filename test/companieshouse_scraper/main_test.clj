@@ -211,3 +211,10 @@
 (companieshouse-scraper.main/search "A" 45
 				    #(do (. Thread sleep (rand 1000))
 					 (println (:name %))))
+
+
+;ALBANY HOMES INTERNATIONAL LIMITED
+;ALBANY HOMES RENTALS LIMITED
+(companieshouse-scraper.main/search "ALBANY HOMES INTERNATIONAL LIMITED" 2
+				    #(do (. Thread sleep (rand 1000))
+					 (println (:name %))))
