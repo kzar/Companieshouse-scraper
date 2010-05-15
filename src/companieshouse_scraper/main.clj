@@ -186,8 +186,6 @@
 	 (list {:do-search (:name company)}
 	       {:scrape (+ num-ahead link-num)})))))
 
-(take 39 (range 80))
-
 (defn scrape-company [session link-num term prev-companies]
   (let [page (web-request (link session link-num))]
     (if (busy-page? page)
