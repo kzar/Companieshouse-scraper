@@ -186,6 +186,8 @@
 	 (list {:do-search (:name company)}
 	       {:scrape (+ num-ahead link-num)})))))
 
+(take 39 (range 80))
+
 (defn scrape-company [session link-num term prev-companies]
   (let [page (web-request (link session link-num))]
     (if (busy-page? page)
@@ -200,7 +202,7 @@
 	     :prev-companies (cons company prev-companies)}
 	    (let [needed-comps (if (or (> link-num 42) (fucked-name? company))
 				 (cons company prev-companies)
-				 (list company (first prev-companies)))]
+				 (cons company (take 39 prev-companies)))]
 	      (if (valid-company? company)
 		{:company company :events (list {:dec-limit 1})
 		 :prev-companies needed-comps}
