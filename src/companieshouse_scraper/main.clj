@@ -218,7 +218,7 @@
      (and (:scrape event) (> (:scrape event) 80))
      (concat (list {:more-results 1}) (add-links (range 1 42)))
      (and (:scrape event) (fucked-name? company))
-     (search-and-click (:scrape event) prev-companies 1))))
+     (list {:fucked-name (:scrape event)}))))
 
 (defn log-error [type message]
   ; FIXME do something more useful
@@ -252,6 +252,9 @@
    (when limit
      (debug (str (dec limit) " scrapes left"))
      {:limit (dec limit)})
+   (= event :fucked-name)
+   {:events (search-and-click data prev-companies 1)
+    :prev-companies (rest prev-companies)}
    (= event :do-search)
    {:session (new-session data) :prev-companies prev-companies}
    (= event :not-company-page)
